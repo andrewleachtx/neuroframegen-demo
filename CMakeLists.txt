@@ -2,8 +2,9 @@ cmake_minimum_required(VERSION 3.16...3.28)
 
 project(neuroframegen-demo LANGUAGES CXX C)
 
-set(CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}/lib/cmake" CACHE PATH "Conda CMake packages path")
-set(CMAKE_LIBRARY_PATH "$ENV{CONDA_PREFIX}/lib" CACHE PATH "Conda library path")
+# TODO: Maybe remove
+set(CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}/lib/cmake" CACHE PATH "")
+set(CMAKE_LIBRARY_PATH "$ENV{CONDA_PREFIX}/lib" CACHE PATH "")
 link_directories("$ENV{CONDA_PREFIX}/lib")
 
 set(CMAKE_CXX_STANDARD 20)
