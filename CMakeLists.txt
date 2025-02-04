@@ -35,6 +35,6 @@ target_link_libraries(main
 if (MSVC)
     target_compile_options(main PRIVATE /W4 /WX)
 else()
-    target_compile_options(main PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -pedantic -Werror -Wno-error=unused-parameter -Wno-error=unused-but-set-variable>)
+    target_compile_options(main PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -pedantic -Werror -Wno-error=unused-parameter -Wno-error=unused-but-set-variable -Wno-error=reorder>)
 endif()
 
