@@ -3,15 +3,9 @@
 #include <dv-processing/core/core.hpp>
 #include <dv-processing/core/frame.hpp>
 #include <dv-processing/io/mono_camera_recording.hpp>
-<<<<<<< HEAD
 #include <dv-processing/core/frame.hpp>
 
 #include <opencv2/highgui.hpp>
-=======
-
-#include <opencv2/highgui.hpp>
-
->>>>>>> 8c269c085d019779034e0dab24e13e9cd81b8eca
 using std::cout, std::endl;
 
 const int FPS = 1; 
