@@ -92,4 +92,31 @@ Digital coded exposure to emulate the frame formation of a conventional camera:
 -9: Visualization of boxcar side lobes. Just pay attention to width of first oscillation (the rest is side lobes)
 -10: Problems with DV and jAER (accidently applying a box filter). Need to sum smarter
 Digital coded exposure as a virtual shutter for conventional frame formation wavelet digital coded exposure
+-1: Digital shutter isn't necessarily binary
+-2: Virtual shutter is a window function (can specify frequency slectivity and sidelobe leakage)
+-3: Description of Morlet function: combination of frequency and time (f vs t)
+-4,5,6: explain each variable in the quatin
+-7: point-wise multiplication
+-8: morlet wavelet is good for frequency selection (leads to passive digital stroboscopy)
+Digital Cpded Exposure for emulating the shutter of a conventional camera
+-1: Describes experiment set up (piston, f= 5.38 Hz)
+-2: Describes event driven data frame of piston
+-3: Introduces using box car shutter
+-4: Specifies parameters (frame length, start, and stop)
+-5: Discusses effect of window width (brightness/motionblur)
+-5: Discusses effect of changing start time (slightly different phases)
+-6: Combines these two parameters
+Morlet Wavelet Digital Coded Exposure for Temporal Pattern Extraction
+-1: Describes light setup (3 different frequency lights (small typo in 300 should be 500))
+-2: Using morlet wavelet for lights (can select the right frequency)
+-3: Discusses results (mostly works for selecting but others are visible)
+Wavelet digital coded exposure for spatio-temporal pattern extraction for digial stroboscopy
+-1: Describe experiment to capture vibrating aluminum beam without additional hardware (useful for morlet parameters)
+Discussion
+-1: Uses of digial coded exposure
+-2: Uses of these frames in post-processing algorithms. Possible expansions (shutter on pixel-by-pixel basis, log-exposure)
+-3: Specific fields this could be used
+Conclusion:
+-1: summary
+questions: check event contribution and how to get info for morlet function
 */
