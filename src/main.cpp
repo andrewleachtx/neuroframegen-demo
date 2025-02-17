@@ -1,4 +1,5 @@
 #include <iostream>
+#include <complex>
 
 #include <dv-processing/core/core.hpp>
 #include <dv-processing/core/frame.hpp>
@@ -17,11 +18,13 @@ int generate_option = 1; // 0 == periodic motion, 1 == multi frequency
 
 // Output
 const int FPS = 1; 
-const float SPF = 1000.0f / FPS; // milliseconds
+const float SPF = 0;//1000.0f / FPS; // milliseconds
 
 // Frame
-const std::chrono::milliseconds FRAME_LENGTH = 1ms; // 125ms for circle, 1ms for lights
-const float PERCENT_OPEN_SHUTTER = 1; // TODO: Change to start stop (so not always at start of frame)
+const std::chrono::milliseconds FRAME_LENGTH = 500ms; // 125ms for circle, 1ms for lights
+const std::chrono::milliseconds SHUTTER_OPEN = 0ms;
+const std::chrono::milliseconds SHUTTER_CLOSE = 500ms; // inclusive
+const bool morlet_bool = true;
 
 // Input
 const char *file_path = "data/lights.aedat4";
@@ -53,17 +56,15 @@ void generate_circle() {
         events.emplace_back(timestamp + interval * (7 + i * epl), 9, 9, true);
     }
 
-    events.emplace_back(timestamp + T * loops, 11, 7, true); // TODO: figure out why last event is cut off
-
     writer.writeEvents(events);
 }
 
 // Helper for generate_lights
-void flicker(dv::EventStore *events, int64_t t, int start_x, int start_y = 2) {
+void flicker(dv::EventStore *events, bool polarity, int64_t t, int start_x, int start_y = 2) {
     for (int i = 0; i < 9; ++i) {
         int x = start_x + (i % 3);
         int y = start_y + (i / 3);
-        events->emplace_back(t, x, y, true);
+        events->emplace_back(t, x, y, polarity);
 
     }
 }
@@ -77,22 +78,25 @@ void generate_lights() {
     // Generate events
     dv::EventStore events;
     const int64_t f1 = 500, f2 = 200, f3 = 125; // Must be in descending order
-    const int64_t t1 = 1000000 / f1, t2 = 1000000 / f2, t3 = 1000000 / f3; 
-
+    const int64_t t1 = 1000000 / f1 / 2, t2 = 1000000 / f2 / 2, t3 = 1000000 / f3 / 2; 
+    bool pol1 = true, pol2 = true, pol3 = true;
     int64_t timestamp = dv::now();
     int64_t last_t2 = timestamp - t1, last_t3 = timestamp - t1;
-    const int64_t end = timestamp + t3 * 3; // inclusive
+    const int64_t end = timestamp + t3 * 2 * 100; // inclusive
     while (timestamp <= end) {
-        flicker(&events, timestamp, 2);
+        flicker(&events, pol1, timestamp, 2);
+        pol1 = not pol1;
 
         if (timestamp + t1 - last_t2 >= t2 && last_t2 + t2 + t1 <= end) {
             last_t2 += t2;
-            flicker(&events, last_t2, 8);
+            flicker(&events, pol2, last_t2, 8);
+            pol2 = not pol2;
         }
 
         if (timestamp + t1 - last_t3 >= t3 && last_t3 + t3 + t1 <= end) {
             last_t3 += t3;
-            flicker(&events, last_t3, 14);
+            flicker(&events, pol3, last_t3, 14);
+            pol3 = not pol3;
         }
         timestamp += t1;
 
@@ -100,6 +104,16 @@ void generate_lights() {
     
     writer.writeEvents(events);
     
+}
+
+float morlet(int64_t curr, float contribution) {
+    float f = 500; // Hz
+    float h = 4 / (1 * f); 
+    float t = curr / 1000000.0f;
+    auto complex_result = std::exp(2.0f * std::complex<float>(0.0f, 1.0f) * std::acos(-1.0f) * f *  t) * 
+    (float) std::exp((-4.0f * std::log(2.0f) * std::pow(t, 2.0f)) / std::pow(h, 2.0f));
+    complex_result *= contribution;
+    return std::real(complex_result) + std::imag(complex_result);
 }
 
 int main() {
@@ -121,8 +135,10 @@ int main() {
     cv::Size resolution = *reader.getEventResolution();
 
     // Provided implementation of dv::AccumulatorBase
-    dv::Accumulator accumulator(resolution);
-    accumulator.setDecayFunction(dv::Accumulator::Decay::STEP);
+    dv::MyAccumulator accumulator(resolution);
+    accumulator.setDecayFunction(dv::MyAccumulator::Decay::STEP);
+    accumulator.setWeighting(morlet);
+    // accumulator.setIgnorePolarity(true);
 
     dv::EventStreamSlicer slicer;
     // Adds an element-timestmp-interval trigger job to the Slicer
@@ -131,13 +147,18 @@ int main() {
     // controls frame length not window function
     slicer.doEveryTimeInterval(FRAME_LENGTH, [&accumulator](const dv::EventStore &events) {
         // Review sliceRate() and isWithinStoreTimeRange
+        accumulator.setCurrentStart(events.getLowestTime() + FRAME_LENGTH.count() * 500);
 
-        int64_t start = events.getLowestTime(); // Returned in microseconds
-        int64_t end = start + (int64_t) (FRAME_LENGTH.count() * PERCENT_OPEN_SHUTTER * 1000);
+        if (morlet_bool == true) {
+            accumulator.accept(events); // .sliceTime(start, stop) //front() or getLowestTime()
+        }
+        else {
+            int64_t start = events.getLowestTime() + SHUTTER_OPEN.count() * 1000; // Returned in us and ms respectively
+            int64_t end = start + SHUTTER_CLOSE.count() * 1000;
+            accumulator.accept(events.sliceTime(start, end + 1)); // .sliceTime(start, stop) //front() or getLowestTime()
+        }
 
-        accumulator.accept(events.sliceTime(start, end)); // .sliceTime(start, stop) //front() or getLowestTime()
         dv::Frame frame = accumulator.generateFrame();
-
         cv::imshow("Preview", frame.image);
 
         // Controls frame rate
@@ -160,7 +181,6 @@ int main() {
 
 
 /*
-Abstract: nothing
 Intro:
 -1: event occurs when brightness of pixel undergoes a change that exceeds a preset threshold. Contains timestamp, location, polarity
 -2: stropboscopic effect and flutter shutter
@@ -205,7 +225,10 @@ Discussion
 Conclusion:
 -1: summary
 
-TODO:
-implement morlet functionality
-gui
+Ideas:
+Extend Accumulator instead of AccumulatorBase for MyAccumulator
+Handle slicing/weighing entirely within accumulator class
+Implement morlet function with currying
+Questions about what defines the start of a frame
+Add in negatives for the morlet thing. Look at graph
 */
