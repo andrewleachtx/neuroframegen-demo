@@ -3,51 +3,93 @@
 #include <dv-processing/core/core.hpp>
 #include <dv-processing/core/frame.hpp>
 #include <dv-processing/io/mono_camera_recording.hpp>
+#include <dv-processing/io/mono_camera_writer.hpp>
 #include <dv-processing/core/frame.hpp>
 
 #include <opencv2/highgui.hpp>
 using std::cout, std::endl;
 using namespace std::chrono_literals;
 
+// Paramters
+// Generate Data
+bool generate = true;
+int generate_option = 1; // 0 == periodic motion, 1 == multi frequency
+
+// Output
 const int FPS = 1; 
 const float SPF = 1000.0f / FPS; // milliseconds
 
-const std::chrono::milliseconds WINDOW_LENGTH = 100ms;
-const float PERCENT_OPEN_SHUTTER = 0.5; // TODO: Change to start stop (so not always at start of frame)
+// Frame
+const std::chrono::milliseconds FRAME_LENGTH = 125ms;
+const float PERCENT_OPEN_SHUTTER = 1; // TODO: Change to start stop (so not always at start of frame)
 
-// dv::EventStore binary_exposure(int percentage) {
-//     return nullptr;
+// Input
+const char *file_path = "data/circle.aedat4";
+// const char *file_path = "data/test_data.aedat4";
 
-// }
+void generate_circle() {
+    // Initialize writer
+    const cv::Size resolution(15, 15);
+    const auto config = dv::io::MonoCameraWriter::EventOnlyConfig("FakeCamera", resolution);
+    dv::io::MonoCameraWriter writer("data/circle.aedat4", config);
 
+    // Generate events
+    dv::EventStore events;
+    const int64_t timestamp = dv::now();
+
+    const int64_t T = 1 * 1000000;
+    int epl = 8; // events per loop
+    const int64_t interval = T / epl; // Should divide evenly or will become slightly out of phase each oscillation
+    int loops = 5;
+    for (int i = 0; i < loops; ++i) {
+        events.emplace_back(timestamp + interval * (0 + i * epl), 11, 7, true);
+        events.emplace_back(timestamp + interval * (1 + i * epl), 9, 5, true);
+        events.emplace_back(timestamp + interval * (2 + i * epl), 7, 3, true);
+        events.emplace_back(timestamp + interval * (3 + i * epl), 5, 5, true);
+        events.emplace_back(timestamp + interval * (4 + i * epl), 3, 7, true);
+        events.emplace_back(timestamp + interval * (5 + i * epl), 5, 9, true);
+        events.emplace_back(timestamp + interval * (6 + i * epl), 7, 11, true);
+        events.emplace_back(timestamp + interval * (7 + i * epl), 9, 9, true);
+    }
+
+    events.emplace_back(timestamp + T * loops, 11, 7, true); // TODO: figure out why last event is cut off
+
+    writer.writeEvents(events);
+}
 
 int main() {
+    exit(0);
+    // Generate file for input
+    if (generate) {
+        if (generate_option == 0) { // periodic motion
+            generate_circle();
 
-    // Initalize data stream from file
-    dv::io::MonoCameraRecording reader("data/test_data.aedat4");
+        }
+        else if (generate_option == 1) { // multi-frequency
+            generate_lights();
 
-    // Initalize accumulator (collects TODO)
-    // params: resolution, decay tyoe, decay param, synchronous Decay, eventContribution, max, neutral, min, ignore polarity
+        }
+
+    }
+
+    // Initalize data stream
+    dv::io::MonoCameraRecording reader(file_path);
+    cv::Size resolution = *reader.getEventResolution();
+
     // Provided implementation of dv::AccumulatorBase
-    dv::Accumulator accumulator(*reader.getEventResolution());
-    accumulator.setDecayFunction(dv::Accumulator::Decay::NONE);
+    dv::Accumulator accumulator(resolution);
+    accumulator.setDecayFunction(dv::Accumulator::Decay::STEP);
 
     dv::EventStreamSlicer slicer;
     // Adds an element-timestmp-interval trigger job to the Slicer
     // Calls callback whenever timestamp difference of an incoming event to the last time the function was called is bigger than the interval
     // Only calls once gets packet "after" interval
     // controls frame length not window function
-    slicer.doEveryTimeInterval(WINDOW_LENGTH, [&accumulator](const dv::EventStore &events) {
+    slicer.doEveryTimeInterval(FRAME_LENGTH, [&accumulator](const dv::EventStore &events) {
+        // Review sliceRate() and isWithinStoreTimeRange
 
-        // Every event contributes evenly to potential
-        // Decay: none, linear, exponential, step
-        
-
-        // sliceRate() may be useful
-        // isWithinStoreTimeRange() may be useful
-
-        int64_t start = events.getLowestTime(); // Returned in microseconds?
-        int64_t end = start + (int64_t) (WINDOW_LENGTH.count() * PERCENT_OPEN_SHUTTER * 1000);
+        int64_t start = events.getLowestTime(); // Returned in microseconds
+        int64_t end = start + (int64_t) (FRAME_LENGTH.count() * PERCENT_OPEN_SHUTTER * 1000);
 
         accumulator.accept(events.sliceTime(start, end)); // .sliceTime(start, stop) //front() or getLowestTime()
         dv::Frame frame = accumulator.generateFrame();
@@ -118,5 +160,8 @@ Discussion
 -3: Specific fields this could be used
 Conclusion:
 -1: summary
-questions: check event contribution and how to get info for morlet function
+
+TODO:
+implement morlet functionality
+gui
 */
