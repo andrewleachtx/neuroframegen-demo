@@ -12,7 +12,7 @@ using namespace std::chrono_literals;
 
 // Paramters
 // Generate Data
-bool generate = true;
+bool generate = false;
 int generate_option = 1; // 0 == periodic motion, 1 == multi frequency
 
 // Output
@@ -20,11 +20,12 @@ const int FPS = 1;
 const float SPF = 1000.0f / FPS; // milliseconds
 
 // Frame
-const std::chrono::milliseconds FRAME_LENGTH = 125ms;
+const std::chrono::milliseconds FRAME_LENGTH = 1ms; // 125ms for circle, 1ms for lights
 const float PERCENT_OPEN_SHUTTER = 1; // TODO: Change to start stop (so not always at start of frame)
 
 // Input
-const char *file_path = "data/circle.aedat4";
+const char *file_path = "data/lights.aedat4";
+// const char *file_path = "data/circle.aedat4";
 // const char *file_path = "data/test_data.aedat4";
 
 void generate_circle() {
@@ -57,8 +58,51 @@ void generate_circle() {
     writer.writeEvents(events);
 }
 
+// Helper for generate_lights
+void flicker(dv::EventStore *events, int64_t t, int start_x, int start_y = 2) {
+    for (int i = 0; i < 9; ++i) {
+        int x = start_x + (i % 3);
+        int y = start_y + (i / 3);
+        events->emplace_back(t, x, y, true);
+
+    }
+}
+
+void generate_lights() {
+    // Initialize writer
+    const cv::Size resolution(19, 7);
+    const auto config = dv::io::MonoCameraWriter::EventOnlyConfig("FakeCamera", resolution);
+    dv::io::MonoCameraWriter writer("data/lights.aedat4", config);
+
+    // Generate events
+    dv::EventStore events;
+    const int64_t f1 = 500, f2 = 200, f3 = 125; // Must be in descending order
+    const int64_t t1 = 1000000 / f1, t2 = 1000000 / f2, t3 = 1000000 / f3; 
+
+    int64_t timestamp = dv::now();
+    int64_t last_t2 = timestamp - t1, last_t3 = timestamp - t1;
+    const int64_t end = timestamp + t3 * 3; // inclusive
+    while (timestamp <= end) {
+        flicker(&events, timestamp, 2);
+
+        if (timestamp + t1 - last_t2 >= t2 && last_t2 + t2 + t1 <= end) {
+            last_t2 += t2;
+            flicker(&events, last_t2, 8);
+        }
+
+        if (timestamp + t1 - last_t3 >= t3 && last_t3 + t3 + t1 <= end) {
+            last_t3 += t3;
+            flicker(&events, last_t3, 14);
+        }
+        timestamp += t1;
+
+    }
+    
+    writer.writeEvents(events);
+    
+}
+
 int main() {
-    exit(0);
     // Generate file for input
     if (generate) {
         if (generate_option == 0) { // periodic motion
