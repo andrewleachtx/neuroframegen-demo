@@ -18,13 +18,15 @@ int generate_option = 1; // 0 == periodic motion, 1 == multi frequency
 
 // Output
 const int FPS = 1; 
-const float SPF = 0;//1000.0f / FPS; // milliseconds
+const float SPF = 1000.0f / FPS; // milliseconds
 
 // Frame
 const std::chrono::milliseconds FRAME_LENGTH = 500ms; // 125ms for circle, 1ms for lights
 const std::chrono::milliseconds SHUTTER_OPEN = 0ms;
 const std::chrono::milliseconds SHUTTER_CLOSE = 500ms; // inclusive
-const bool morlet_bool = true;
+bool use_morlet = true;
+float f = 500; // Hz
+float h = 4 / (1 * f); // Seconds(ish)
 
 // Input
 const char *file_path = "data/lights.aedat4";
@@ -78,7 +80,7 @@ void generate_lights() {
     // Generate events
     dv::EventStore events;
     const int64_t f1 = 500, f2 = 200, f3 = 125; // Must be in descending order
-    const int64_t t1 = 1000000 / f1 / 2, t2 = 1000000 / f2 / 2, t3 = 1000000 / f3 / 2; 
+    const int64_t t1 = 1000000 / f1 / 2, t2 = 1000000 / f2 / 2, t3 = 1000000 / f3 / 2; // 2, 5, 8
     bool pol1 = true, pol2 = true, pol3 = true;
     int64_t timestamp = dv::now();
     int64_t last_t2 = timestamp - t1, last_t3 = timestamp - t1;
@@ -107,8 +109,6 @@ void generate_lights() {
 }
 
 float morlet(int64_t curr, float contribution) {
-    float f = 500; // Hz
-    float h = 4 / (1 * f); 
     float t = curr / 1000000.0f;
     auto complex_result = std::exp(2.0f * std::complex<float>(0.0f, 1.0f) * std::acos(-1.0f) * f *  t) * 
     (float) std::exp((-4.0f * std::log(2.0f) * std::pow(t, 2.0f)) / std::pow(h, 2.0f));
@@ -137,32 +137,37 @@ int main() {
     // Provided implementation of dv::AccumulatorBase
     dv::MyAccumulator accumulator(resolution);
     accumulator.setDecayFunction(dv::MyAccumulator::Decay::STEP);
-    accumulator.setWeighting(morlet);
     // accumulator.setIgnorePolarity(true);
 
+    if (use_morlet) {
+        accumulator.setShutter(morlet);
+    }
+
+    bool first = true;
     dv::EventStreamSlicer slicer;
     // Adds an element-timestmp-interval trigger job to the Slicer
     // Calls callback whenever timestamp difference of an incoming event to the last time the function was called is bigger than the interval
     // Only calls once gets packet "after" interval
     // controls frame length not window function
-    slicer.doEveryTimeInterval(FRAME_LENGTH, [&accumulator](const dv::EventStore &events) {
+    slicer.doEveryTimeInterval(FRAME_LENGTH, [&accumulator, &first](const dv::EventStore &events) {
         // Review sliceRate() and isWithinStoreTimeRange
         accumulator.setCurrentStart(events.getLowestTime() + FRAME_LENGTH.count() * 500);
 
-        if (morlet_bool == true) {
-            accumulator.accept(events); // .sliceTime(start, stop) //front() or getLowestTime()
-        }
-        else {
-            int64_t start = events.getLowestTime() + SHUTTER_OPEN.count() * 1000; // Returned in us and ms respectively
-            int64_t end = start + SHUTTER_CLOSE.count() * 1000;
-            accumulator.accept(events.sliceTime(start, end + 1)); // .sliceTime(start, stop) //front() or getLowestTime()
-        }
+        int64_t start = events.getLowestTime() + SHUTTER_OPEN.count() * 1000; // Returned in us and ms respectively
+        int64_t end = start + SHUTTER_CLOSE.count() * 1000;
+        accumulator.accept(events.sliceTime(start, end + 1)); // .sliceTime(start, stop) //front() or getLowestTime()
 
         dv::Frame frame = accumulator.generateFrame();
         cv::imshow("Preview", frame.image);
 
         // Controls frame rate
-        cv::waitKey(SPF);
+        if (first == true) {
+            first = false;
+            cv::waitKey(0);
+        }
+        else {
+            cv::waitKey(SPF);
+        }
 
     });
 
@@ -230,5 +235,4 @@ Extend Accumulator instead of AccumulatorBase for MyAccumulator
 Handle slicing/weighing entirely within accumulator class
 Implement morlet function with currying
 Questions about what defines the start of a frame
-Add in negatives for the morlet thing. Look at graph
 */

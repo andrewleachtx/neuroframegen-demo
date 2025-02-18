@@ -1,7 +1,3 @@
-/**
- * Add to include/dv-processing/include/dv-processing/core/frame
- * Add #include "frame/my_accumulator.hpp" to include/dv-processing/include/dv-processing/core/frame.hpp
- */
 #pragma once
 
 #include "accumulator_base.hpp"
@@ -44,7 +40,7 @@ private:
 	float maxPotential_      = .0;
 	float neutralPotential_  = .0;
 	float minPotential_      = .0;
-	float (*weighting)(int64_t t, float x) = nullptr;
+	float (*shutter)(int64_t t, float x) = nullptr;
 	int64_t current_start = 0;
 
 	// decay
@@ -113,7 +109,7 @@ private:
 	 * @param x The x coordinate of where to contribute to
 	 * @param y The y coordinate of where to contribute to
 	 * @param polarity The polarity of the contribution
-	 * @param weight The result of the weighting function for the current event
+	 * @param contribution The result of the shutter function for the current event
 	 */
 	void contribute(int16_t x, int16_t y, bool polarity, float contribution) {
 		const float lastPotential = potentialSurface_.at<float>(y, x);
@@ -172,7 +168,7 @@ public:
 	explicit MyAccumulator(const cv::Size &resolution, MyAccumulator::Decay decayFunction = Decay::EXPONENTIAL,
 		double decayParam = 1.0e+6, bool synchronousDecay = false, float eventContribution = 0.15f,
 		float maxPotential = 1.0f, float neutralPotential = 0.f, float minPotential = 0.f,
-		bool ignorePolarity = false, float (*weighting)(int64_t t, float x) = nullptr) :
+		bool ignorePolarity = false, float (*func)(int64_t t, float x) = nullptr) :
 		AccumulatorBase(resolution),
 		rectifyPolarity_(ignorePolarity),
 		eventContribution_(eventContribution),
@@ -185,7 +181,7 @@ public:
 		decayTimeSurface_(TimeSurface(resolution)),
 		potentialSurface_(cv::Mat(resolution, CV_32F, static_cast<double>(neutralPotential))),
 		highestTime_(0), 
-		weighting(weighting),
+		shutter(func),
 		current_start(0) {
 	}
 
@@ -211,13 +207,13 @@ public:
 				dv::runtime_assert(0 <= event.y() && event.y() <= shape_.height, "event Y coordinate out of bounds");
 				dv::runtime_assert(0 <= event.x() && event.x() <= shape_.width, "event X coordinate out of bounds");
 
-				float weight = 1;
-				if (weighting != nullptr) {
-					weight = weighting(event.timestamp() - current_start, eventContribution_);
-
+				float contribution = eventContribution_;
+				if (shutter != nullptr) {
+					contribution = shutter(event.timestamp() - current_start, eventContribution_);
 				}
 
-				contribute(event.x(), event.y(), event.polarity(), weight);
+				contribute(event.x(), event.y(), event.polarity(), contribution);
+			
 			}
 		}
 		else {
@@ -226,14 +222,14 @@ public:
 				dv::runtime_assert(0 <= event.y() && event.y() <= shape_.height, "event Y coordinate out of bounds");
 				dv::runtime_assert(0 <= event.x() && event.x() <= shape_.width, "event X coordinate out of bounds");
 
-				float weight = 1;
-				if (weighting != nullptr) {
-					weight = weighting(event.timestamp() - current_start, eventContribution_);
-
+				float contribution = eventContribution_;
+				if (shutter != nullptr) {
+					contribution = shutter(event.timestamp() - current_start, eventContribution_);
 				}
 
 				decay(event.x(), event.y(), event.timestamp());
-				contribute(event.x(), event.y(), event.polarity(), weight);
+				contribute(event.x(), event.y(), event.polarity(), contribution);
+
 			}
 		}
 
@@ -370,15 +366,15 @@ public:
 
 	/**
 	 * If not nulltpr, controls the weighting of a given event's contribution
-	 * @param weighting the function to be applied to each event
+	 * @param shutter the function to be applied to each event
 	 */
-	void setWeighting(float (*weighting)(int64_t t, float x)) {
-		MyAccumulator::weighting = weighting;
+	void setShutter(float (*shutter)(int64_t t, float x)) {
+		MyAccumulator::shutter = shutter;
 	}
 
 	/**
-	 * If not nulltpr, controls the weighting of a given event's contribution
-	 * @param weighting the function to be applied to each event
+	 * Sets the first timestamp of the frame
+	 * @param t the timestamp to be set
 	 */
 	void setCurrentStart(int64_t t) {
 		MyAccumulator::current_start = t;
